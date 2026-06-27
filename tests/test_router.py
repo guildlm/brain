@@ -31,6 +31,34 @@ def test_heuristic_classification(prompt, domain, language, task):
     assert result.task == task
 
 
+@pytest.mark.parametrize(
+    ("prompt", "task"),
+    [
+        ("Write a SQL query to list the top 5 customers by revenue", "generation"),
+        ("Review this SQL query for injection risks", "review"),
+        ("Optimize this slow query and suggest an index", "optimization"),
+        ("Explain what this SQL SELECT with a JOIN does", "explanation"),
+        ("My Postgres query is too slow, how do I speed it up?", "optimization"),
+    ],
+)
+def test_heuristic_sql_classification(prompt, task):
+    router = IntentRouter(offline=True)
+    result = router.classify(prompt)
+    assert isinstance(result, Classification)
+    assert result.source == "heuristic"
+    assert result.domain == "sql"
+    assert result.language == "sql"
+    assert result.task == task
+
+
+def test_heuristic_sql_does_not_break_go_routing():
+    """A Go prompt must still classify as code even though SQL is now supported."""
+    router = IntentRouter(offline=True)
+    result = router.classify("Review this Go code for race conditions")
+    assert result.domain == "code"
+    assert result.language == "go"
+
+
 def test_offline_router_never_calls_backend():
     backend = FakeBackend()
     router = IntentRouter(backend=backend, offline=True)

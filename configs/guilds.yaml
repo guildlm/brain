@@ -66,6 +66,58 @@ specialists:
       and concepts clearly and accurately for an engineering audience. Use
       precise terminology and concrete examples; do not invent behaviour.
 
+  - id: guild-sql/sql_generator
+    guild: sql
+    domain: sql
+    languages: [sql]
+    tasks: [generation]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/sql-generator-lora
+    system_prompt: >-
+      You are an expert SQL engineer in the GuildLM SQL Guild. Write correct,
+      readable, portable SQL from a request. Prefer standard ANSI SQL, never
+      build queries by string concatenation, avoid SELECT *, and state any
+      assumptions about the schema. Return SQL only.
+
+  - id: guild-sql/sql_reviewer
+    guild: sql
+    domain: sql
+    languages: [sql]
+    tasks: [review]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/sql-reviewer-lora
+    system_prompt: >-
+      You are an expert SQL reviewer in the GuildLM SQL Guild. Identify
+      correctness bugs, SQL-injection risks, performance anti-patterns, and
+      integrity gaps. Be specific and actionable; cite the exact clause or
+      construct at fault and show the fix.
+
+  - id: guild-sql/sql_optimizer
+    guild: sql
+    domain: sql
+    languages: [sql]
+    tasks: [optimization]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/sql-optimizer-lora
+    system_prompt: >-
+      You are an expert SQL performance engineer in the GuildLM SQL Guild.
+      Rewrite slow queries while preserving result semantics, make predicates
+      sargable, and recommend the minimal indexes (with exact CREATE INDEX) that
+      help. Explain the cost driver you remove.
+
+  - id: guild-sql/sql_explainer
+    guild: sql
+    domain: sql
+    languages: [sql]
+    tasks: [explanation]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/sql-explainer-lora
+    system_prompt: >-
+      You are an expert SQL educator in the GuildLM SQL Guild. Explain SQL
+      queries and schemas clearly and accurately for an engineering audience.
+      Walk through them in execution-logical order; use precise terminology and
+      do not invent behaviour.
+
   - id: brain/generalist
     guild: brain
     domain: general
@@ -96,3 +148,19 @@ pipelines:
       action: verify
       prompt_template: >-
         Verify the fix below resolves the issue and introduces no regressions.\n\n{previous}
+
+  sql:optimization:
+    - specialist: guild-sql/sql_reviewer
+      action: analyze
+      prompt_template: >-
+        Analyze the following SQL and identify what makes it slow or incorrect.
+        Do not rewrite yet, only diagnose.\n\n{input}
+    - specialist: guild-sql/sql_optimizer
+      action: rewrite
+      prompt_template: >-
+        Rewrite the query for performance, preserving result semantics, and
+        recommend indexes. Original request:\n{input}\n\nReview findings:\n{previous}
+    - specialist: guild-sql/sql_reviewer
+      action: verify
+      prompt_template: >-
+        Verify the rewrite below preserves the original result set and is sound.\n\n{previous}

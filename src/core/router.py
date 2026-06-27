@@ -32,7 +32,34 @@ logger = logging.getLogger(__name__)
 # Below this confidence the LLM result is discarded in favour of the heuristic.
 DEFAULT_CONFIDENCE_THRESHOLD = 0.45
 
-SUPPORTED_DOMAINS = ["code", "legal", "finance", "medical", "creative", "general"]
+SUPPORTED_DOMAINS = ["code", "sql", "legal", "finance", "medical", "creative", "general"]
+
+# Tokens / phrases that signal the SQL domain in the offline heuristic. Strong,
+# largely unambiguous SQL terms; checked only after the Go branch so prompts that
+# mention Go stay in the code domain.
+_SQL_KEYWORDS = {
+    "sql",
+    "query",
+    "queries",
+    "select",
+    "join",
+    "subquery",
+    "cte",
+    "index",
+    "schema",
+    "database",
+    "postgres",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "mariadb",
+    "slow query",
+    "stored procedure",
+    "primary key",
+    "foreign key",
+    "group by",
+    "where clause",
+}
 
 _CLASSIFIER_SYSTEM_PROMPT = (
     "You are the routing classifier for GuildLM, a system of specialist models. "
@@ -43,7 +70,7 @@ _CLASSIFIER_SYSTEM_PROMPT = (
     "- language: the programming or natural language involved (e.g. 'go', "
     "'python', 'english'), or 'unknown'.\n"
     "- task: a coarse action such as 'generation', 'review', 'testing', "
-    "'bug_fix', 'explanation', or 'general_qa'.\n"
+    "'bug_fix', 'optimization', 'explanation', or 'general_qa'.\n"
     "- subtask: an optional finer hint, or null.\n"
     "- confidence: a float in [0,1] for how sure you are.\n"
     "Example: {\"domain\":\"code\",\"language\":\"go\",\"task\":\"generation\","
@@ -210,6 +237,11 @@ class IntentRouter:
             language = "go"
             confidence = 0.7
             task, subtask = self._classify_code_task(text)
+        elif self._mentions(tokens, text, _SQL_KEYWORDS):
+            domain = "sql"
+            language = "sql"
+            confidence = 0.7
+            task, subtask = self._classify_sql_task(text)
         elif self._mentions(tokens, text, {"code", "function", "program", "refactor", "compile"}):
             domain = "code"
             confidence = 0.5
@@ -252,3 +284,38 @@ class IntentRouter:
         if any(k in text for k in ("build", "write", "create", "implement", "generate", "api", "server")):
             return "generation", None
         return "review", None
+
+    @staticmethod
+    def _classify_sql_task(text: str) -> tuple[str, Optional[str]]:
+        """Map free text to a (task, subtask) pair for the sql domain.
+
+        Order matters: an optimization intent ("slow query", "add an index")
+        takes precedence over the generic generation keywords, and an explicit
+        review/explanation intent is detected before falling back to generation.
+        """
+        if any(
+            k in text
+            for k in (
+                "optimi",  # optimize / optimise / optimization
+                "slow",
+                "performance",
+                "faster",
+                "speed up",
+                "query plan",
+                "execution plan",
+                "sargable",
+                "index",
+                "tune",
+            )
+        ):
+            return "optimization", None
+        if any(k in text for k in ("review", "audit", "injection", "security", "anti-pattern", "lint")):
+            return "review", None
+        if any(k in text for k in ("explain", "understand", "what does", "how does", "document")):
+            return "explanation", None
+        if any(
+            k in text
+            for k in ("write", "create", "build", "generate", "fetch", "select", "give me", "find", "list")
+        ):
+            return "generation", None
+        return "generation", None
