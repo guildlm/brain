@@ -1,0 +1,98 @@
+# GuildLM guild & specialist registry.
+#
+# Each specialist is a focused SLM (base model + optional LoRA adapter) with a
+# system prompt. The brain routes classified requests here; it never answers
+# domain questions itself. The `brain/generalist` entry is the safety-net used
+# when no specialist matches.
+#
+# `pipelines` define multi-step orchestrations keyed by (domain, task). A step
+# names the specialist to invoke and a label; the orchestrator feeds the user
+# input and the previous step's output through `prompt_template`.
+
+defaults:
+  # Base model served by the inference backend (Ollama tag / vLLM model id).
+  base_model: qwen2.5:7b-instruct
+  fallback_specialist: brain/generalist
+
+specialists:
+  - id: guild-code/go_generator
+    guild: code
+    domain: code
+    languages: [go]
+    tasks: [generation, bug_fix]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/go-generator-lora
+    system_prompt: >-
+      You are an expert Go programmer in the GuildLM Code Guild. Write
+      idiomatic, secure, production-grade Go. Prefer the standard library,
+      handle every error, and avoid unnecessary dependencies. Return code only,
+      with brief inline comments where they add value.
+
+  - id: guild-code/go_reviewer
+    guild: code
+    domain: code
+    languages: [go]
+    tasks: [review, bug_fix]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/go-reviewer-lora
+    system_prompt: >-
+      You are an expert Go code reviewer in the GuildLM Code Guild. Identify
+      race conditions, goroutine and resource leaks, nil-pointer risks, error
+      handling gaps, and security flaws. Be specific and actionable; cite the
+      exact lines or constructs at fault.
+
+  - id: guild-code/go_tester
+    guild: code
+    domain: code
+    languages: [go]
+    tasks: [testing]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/go-tester-lora
+    system_prompt: >-
+      You are an expert Go test engineer in the GuildLM Code Guild. Write
+      thorough, table-driven tests using the standard testing package. Cover
+      edge cases, error paths, and concurrency where relevant. Return runnable
+      test code only.
+
+  - id: guild-code/go_explainer
+    guild: code
+    domain: code
+    languages: [go]
+    tasks: [explanation]
+    model: qwen2.5:7b-instruct
+    lora: guildlm/go-explainer-lora
+    system_prompt: >-
+      You are an expert Go educator in the GuildLM Code Guild. Explain Go code
+      and concepts clearly and accurately for an engineering audience. Use
+      precise terminology and concrete examples; do not invent behaviour.
+
+  - id: brain/generalist
+    guild: brain
+    domain: general
+    languages: [unknown]
+    tasks: [general_qa]
+    model: qwen2.5:7b-instruct
+    lora: null
+    system_prompt: >-
+      You are the GuildLM Brain generalist fallback. The request did not match a
+      specialist guild. Help the user as best you can, and where appropriate
+      suggest which guild could serve them better.
+
+# Multi-step pipelines keyed by "<domain>:<task>". When a classification matches
+# a pipeline, the orchestrator runs every step in order, threading outputs.
+pipelines:
+  code:bug_fix:
+    - specialist: guild-code/go_reviewer
+      action: analyze
+      prompt_template: >-
+        Analyze the following request and identify the bug(s) precisely. Do not
+        fix yet, only diagnose.\n\n{input}
+    - specialist: guild-code/go_generator
+      action: fix
+      prompt_template: >-
+        Apply a fix for the issues below. Original request:\n{input}\n\nReview
+        findings:\n{previous}
+    - specialist: guild-code/go_reviewer
+      action: verify
+      prompt_template: >-
+        Verify the fix below resolves the issue and introduces no regressions.\n\n{previous}
