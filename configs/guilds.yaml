@@ -133,6 +133,23 @@ specialists:
 # Multi-step pipelines keyed by "<domain>:<task>". When a classification matches
 # a pipeline, the orchestrator runs every step in order, threading outputs.
 pipelines:
+  code:generation:
+    - specialist: guild-code/go_generator
+      action: generate
+      prompt_template: >-
+        Write the Go code requested below. Idiomatic, standard-library, every
+        error handled.\n\n{input}
+    - specialist: guild-code/go_tester
+      action: test
+      prompt_template: >-
+        Write thorough table-driven tests for the Go code below. Do not
+        redeclare it; just test it.\n\nOriginal request:\n{input}\n\nCode:\n{previous}
+    - specialist: guild-code/go_reviewer
+      action: review
+      prompt_template: >-
+        Review the Go code and tests below for real bugs and idiomatic-Go
+        improvements; cite the exact lines and show the fix.\n\n{previous}
+
   code:bug_fix:
     - specialist: guild-code/go_reviewer
       action: analyze

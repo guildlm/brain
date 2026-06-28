@@ -75,8 +75,14 @@ def test_pipeline_lookup(registry: GuildRegistry):
     pipeline = registry.pipeline_for(c)
     assert pipeline is not None
     assert [s.action for s in pipeline] == ["analyze", "fix", "verify"]
-    assert registry.pipeline_for(
+    # code:generation is also a guild pipeline now (generate -> test -> review).
+    gen = registry.pipeline_for(
         Classification(domain="code", language="go", task="generation", confidence=0.9)
+    )
+    assert [s.action for s in gen] == ["generate", "test", "review"]
+    # A single-specialist task (explanation) has no pipeline.
+    assert registry.pipeline_for(
+        Classification(domain="code", language="go", task="explanation", confidence=0.9)
     ) is None
 
 

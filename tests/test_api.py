@@ -42,10 +42,10 @@ def test_classify_endpoint(client: TestClient):
 
 
 def test_chat_endpoint_single_specialist(client: TestClient):
-    resp = client.post("/chat", json={"prompt": "Build an HTTP API in Go"})
+    resp = client.post("/chat", json={"prompt": "Explain what a goroutine is in Go"})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["specialist"] == "guild-code/go_generator"
+    assert body["specialist"] == "guild-code/go_explainer"
     assert body["answer"] == "FAKE ANSWER"
     assert body["classification"]["domain"] == "code"
     assert len(body["steps"]) == 1

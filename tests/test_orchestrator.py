@@ -20,8 +20,10 @@ def _orchestrator(backend: FakeBackend) -> BrainOrchestrator:
 def test_single_specialist_execution():
     backend = FakeBackend(lambda model, msgs: "GENERATED CODE")
     orch = _orchestrator(backend)
-    result = orch.execute_request("Build an HTTP API in Go")
-    assert result.specialist == "guild-code/go_generator"
+    # An explanation request maps to a single specialist (generation is now a
+    # multi-step guild pipeline, so it would no longer exercise the single path).
+    result = orch.execute_request("Explain what a goroutine is in Go")
+    assert result.specialist == "guild-code/go_explainer"
     assert result.answer == "GENERATED CODE"
     assert len(result.steps) == 1
     assert result.steps[0].action == "answer"
